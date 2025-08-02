@@ -1,11 +1,11 @@
-// server.js - Versión con conexión real a MongoDB
+// server.js - Versión lista para producción en Render
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-const connectDB = require('./src/config/database'); // ✅ Importar conexión DB
-const { errorHandler } = require('./src/middleware/errorHandler'); // ✅ Importar error handler
+const connectDB = require('./src/config/database');
+const { errorHandler } = require('./src/middleware/errorHandler');
 require('dotenv').config();
 
 const app = express();
@@ -16,7 +16,6 @@ console.log('🚀 Iniciando SocialConnect API...');
 // ✅ CONECTAR A MONGODB AL INICIO
 const startServer = async () => {
   try {
-    // Conectar a la base de datos
     await connectDB();
     console.log('✅ Base de datos conectada exitosamente');
   } catch (error) {
@@ -28,10 +27,18 @@ const startServer = async () => {
 // Middleware de seguridad
 app.use(helmet());
 
-// Middleware para permitir CORS
+// ✅ CORS CONFIGURADO PARA PRODUCCIÓN
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  credentials: true
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        process.env.RENDER_EXTERNAL_URL,
+        process.env.FRONTEND_URL,
+        /\.onrender\.com$/  // Permitir todos los subdominios de Render
+      ]
+    : '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Middleware para parsear JSON
@@ -40,7 +47,7 @@ app.use(express.urlencoded({ extended: true }));
 
 console.log('✅ Middleware configurado');
 
-// Configuración de Swagger para documentación de la API
+// ✅ SWAGGER CONFIGURADO PARA PRODUCCIÓN
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0',
@@ -55,8 +62,8 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.API_URL || 'http://localhost:3000',
-        description: 'Servidor de desarrollo'
+        url: process.env.RENDER_EXTERNAL_URL || process.env.API_URL || 'http://localhost:3000',
+        description: process.env.NODE_ENV === 'production' ? 'Servidor de producción' : 'Servidor de desarrollo'
       }
     ],
     components: {
@@ -70,9 +77,9 @@ const swaggerOptions = {
     }
   },
   apis: [
-    './src/routes/*.js',    // Rutas de la API
-    './src/models/*.js',    // Modelos (aquí están los schemas)
-    './server.js'           // Archivo principal
+    './src/routes/*.js',
+    './src/models/*.js',
+    './server.js'
   ]
 };
 
@@ -103,29 +110,33 @@ console.log('✅ Swagger configurado');
  *                   type: string
  *                   example: "1.0.0"
  */
+// ✅ RUTA RAÍZ CON URLs DINÁMICAS
 app.get('/', (req, res) => {
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  
   res.json({
     message: 'Bienvenido a SocialConnect API',
-    documentation: '/api-docs',
+    documentation: `${baseUrl}/api-docs`,
     version: '1.0.0',
     status: 'funcionando ✅',
+    environment: process.env.NODE_ENV || 'development',
     endpoints: {
-      users: '/api/users',
-      posts: '/api/posts',
-      docs: '/api-docs'
+      users: `${baseUrl}/api/users`,
+      posts: `${baseUrl}/api/posts`,
+      docs: `${baseUrl}/api-docs`
     }
   });
 });
 
-// Swagger UI - Debe ir antes de las rutas de la API
+// Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 console.log('✅ Swagger UI configurado en /api-docs');
 
-// ✅ IMPORTAR RUTAS REALES (que usan los controladores)
+// ✅ IMPORTAR RUTAS (usando nombres correctos)
 try {
   console.log('🔍 Cargando rutas de usuarios...');
-  const userRoutes = require('./src/routes/userRoutes'); // Cambiar a rutas reales
+  const userRoutes = require('./src/routes/userRoutes');
   app.use('/api/users', userRoutes);
   console.log('✅ Rutas de usuarios cargadas correctamente');
 } catch (error) {
@@ -134,7 +145,7 @@ try {
 
 try {
   console.log('🔍 Cargando rutas de posts...');
-  const postRoutes = require('./src/routes/postRoutes'); // Cambiar a rutas reales
+  const postRoutes = require('./src/routes/postRoutes');
   app.use('/api/posts', postRoutes);
   console.log('✅ Rutas de posts cargadas correctamente');
 } catch (error) {
@@ -155,19 +166,22 @@ app.use('*', (req, res) => {
   });
 });
 
-// ✅ USAR EL ERROR HANDLER REAL
+// ✅ USAR EL ERROR HANDLER
 app.use(errorHandler);
 
-// ✅ INICIAR SERVIDOR CON CONEXIÓN DB
+// ✅ INICIAR SERVIDOR CON LOGS DINÁMICOS
 const initializeApp = async () => {
   await startServer();
   
   app.listen(PORT, () => {
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    
     console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);
-    console.log(`📚 Documentación disponible en: http://localhost:${PORT}/api-docs`);
-    console.log(`🌐 API disponible en: http://localhost:${PORT}`);
-    console.log(`👥 Usuarios: http://localhost:${PORT}/api/users`);
-    console.log(`📝 Posts: http://localhost:${PORT}/api/posts`);
+    console.log(`🌐 Entorno: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📚 Documentación disponible en: ${baseUrl}/api-docs`);
+    console.log(`🌐 API disponible en: ${baseUrl}`);
+    console.log(`👥 Usuarios: ${baseUrl}/api/users`);
+    console.log(`📝 Posts: ${baseUrl}/api/posts`);
     console.log('');
     console.log('✅ SocialConnect API lista para usar!');
   });
