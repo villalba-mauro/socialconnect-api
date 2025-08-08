@@ -1,3 +1,4 @@
+// src/middleware/oauth.js - Versión arreglada y simplificada
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const GitHubStrategy = require('passport-github2').Strategy;
@@ -6,231 +7,198 @@ const { generateTokens } = require('./auth');
 
 /**
  * Configuración de Passport para OAuth
- * passport.js es una biblioteca para autenticación en Node.js
- * Maneja múltiples estrategias de autenticación (Google, GitHub, etc.)
  */
+
+console.log('🔍 Verificando credenciales OAuth...');
+console.log('Google Client ID:', process.env.GOOGLE_CLIENT_ID ? `✅ Configurado (${process.env.GOOGLE_CLIENT_ID.substring(0, 10)}...)` : '❌ Faltante');
+console.log('Google Client Secret:', process.env.GOOGLE_CLIENT_SECRET ? `✅ Configurado (${process.env.GOOGLE_CLIENT_SECRET.substring(0, 10)}...)` : '❌ Faltante');
+console.log('GitHub Client ID:', process.env.GITHUB_CLIENT_ID ? `✅ Configurado (${process.env.GITHUB_CLIENT_ID.substring(0, 10)}...)` : '❌ Faltante');
+console.log('GitHub Client Secret:', process.env.GITHUB_CLIENT_SECRET ? `✅ Configurado (${process.env.GITHUB_CLIENT_SECRET.substring(0, 10)}...)` : '❌ Faltante');
 
 /**
  * Serialización de usuario para sesiones
- * Determina qué datos del usuario se almacenan en la sesión
- * @param {Object} user - Usuario autenticado
- * @param {Function} done - Callback de finalización
  */
 passport.serializeUser((user, done) => {
-  // Solo almacenar el ID del usuario en la sesión
+  console.log('🔐 Serializando usuario:', user._id);
   done(null, user._id);
 });
 
 /**
- * Deserialización de usuario para sesiones  
- * Recupera el usuario completo basado en el ID almacenado en la sesión
- * @param {String} id - ID del usuario
- * @param {Function} done - Callback de finalización
+ * Deserialización de usuario para sesiones
  */
 passport.deserializeUser(async (id, done) => {
   try {
-    // Buscar usuario por ID excluyendo la contraseña
+    console.log('🔓 Deserializando usuario:', id);
     const user = await User.findById(id).select('-password');
     done(null, user);
   } catch (error) {
+    console.error('❌ Error deserializando usuario:', error);
     done(error, null);
   }
 });
 
 /**
- * Estrategia de autenticación con Google OAuth 2.0
- * Permite a los usuarios iniciar sesión con su cuenta de Google
+ * Estrategia de Google OAuth
  */
-passport.use(new GoogleStrategy({
-  // ID de cliente de Google (se obtiene en Google Cloud Console)
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  
-  // Secreto de cliente de Google
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  
-  // URL donde Google redirigirá después de la autenticación
-  callbackURL: "/api/auth/google/callback"
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    console.log('🔍 Procesando autenticación con Google:', profile.id);
-    
-    // Buscar si ya existe un usuario con este ID de Google
-    let user = await User.findOne({ 
-      oauthId: profile.id, 
-      oauthProvider: 'google' 
-    });
-
-    if (user) {
-      // Usuario ya existe, actualizar último login
-      console.log('✅ Usuario Google existente encontrado:', user.username);
-      await user.updateLastLogin();
-      return done(null, user);
-    }
-
-    // Verificar si ya existe un usuario con el mismo email
-    user = await User.findOne({ email: profile.emails[0].value });
-    
-    if (user) {
-      // Usuario existe pero no tiene OAuth configurado
-      // Vincular cuenta de Google a usuario existente
-      console.log('🔗 Vinculando cuenta Google a usuario existente');
-      user.oauthProvider = 'google';
-      user.oauthId = profile.id;
-      await user.save();
-      await user.updateLastLogin();
-      return done(null, user);
-    }
-
-    // Crear nuevo usuario con datos de Google
-    console.log('🆕 Creando nuevo usuario desde Google');
-    const newUser = await User.create({
-      username: profile.emails[0].value.split('@')[0], // Usar parte del email como username
-      email: profile.emails[0].value,
-      firstName: profile.name.givenName,
-      lastName: profile.name.familyName,
-      profilePicture: profile.photos[0]?.value,
-      oauthProvider: 'google',
-      oauthId: profile.id,
-      // No se requiere contraseña para OAuth
-    });
-
-    console.log('✅ Usuario Google creado exitosamente:', newUser.username);
-    await newUser.updateLastLogin();
-    done(null, newUser);
-
-  } catch (error) {
-    console.error('❌ Error en autenticación Google:', error);
-    done(error, null);
-  }
-}));
-
-/**
- * Estrategia de autenticación con GitHub OAuth
- * Permite a los usuarios iniciar sesión con su cuenta de GitHub
- */
-passport.use(new GitHubStrategy({
-  // ID de cliente de GitHub (se obtiene en GitHub Developer Settings)
-  clientID: process.env.GITHUB_CLIENT_ID,
-  
-  // Secreto de cliente de GitHub
-  clientSecret: process.env.GITHUB_CLIENT_SECRET,
-  
-  // URL donde GitHub redirigirá después de la autenticación
-  callbackURL: "/api/auth/github/callback"
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    console.log('🔍 Procesando autenticación con GitHub:', profile.id);
-    
-    // Buscar si ya existe un usuario con este ID de GitHub
-    let user = await User.findOne({ 
-      oauthId: profile.id.toString(), 
-      oauthProvider: 'github' 
-    });
-
-    if (user) {
-      // Usuario ya existe
-      console.log('✅ Usuario GitHub existente encontrado:', user.username);
-      await user.updateLastLogin();
-      return done(null, user);
-    }
-
-    // Obtener email principal de GitHub
-    const email = profile.emails && profile.emails[0] ? profile.emails[0].value : null;
-    
-    if (email) {
-      // Verificar si ya existe un usuario con el mismo email
-      user = await User.findOne({ email });
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "/api/auth/google/callback"
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      console.log('🔐 Procesando autenticación Google para:', profile.emails[0].value);
       
+      // Buscar usuario existente por Google ID o email
+      let user = await User.findOne({
+        $or: [
+          { oauthId: profile.id, oauthProvider: 'google' },
+          { email: profile.emails[0].value }
+        ]
+      });
+
       if (user) {
-        // Vincular cuenta de GitHub a usuario existente
-        console.log('🔗 Vinculando cuenta GitHub a usuario existente');
-        user.oauthProvider = 'github';
-        user.oauthId = profile.id.toString();
-        await user.save();
+        // Usuario existente
+        if (!user.oauthId) {
+          user.oauthId = profile.id;
+          user.oauthProvider = 'google';
+          await user.save();
+        }
+        console.log('✅ Usuario Google existente autenticado:', user.email);
         await user.updateLastLogin();
         return done(null, user);
       }
+
+      // Crear nuevo usuario
+      const newUser = await User.create({
+        username: profile.emails[0].value.split('@')[0] + '_' + Date.now(),
+        email: profile.emails[0].value,
+        firstName: profile.name.givenName || 'Usuario',
+        lastName: profile.name.familyName || 'Google',
+        profilePicture: profile.photos[0]?.value,
+        oauthProvider: 'google',
+        oauthId: profile.id,
+        isActive: true
+      });
+
+      console.log('✅ Nuevo usuario Google creado:', newUser.email);
+      await newUser.updateLastLogin();
+      return done(null, newUser);
+
+    } catch (error) {
+      console.error('❌ Error en Google OAuth:', error);
+      return done(error, null);
     }
-
-    // Crear nuevo usuario con datos de GitHub
-    console.log('🆕 Creando nuevo usuario desde GitHub');
-    const newUser = await User.create({
-      username: profile.username || profile.displayName?.replace(/\s+/g, '_').toLowerCase(),
-      email: email || `${profile.username}@github.local`, // Email temporal si no se proporciona
-      firstName: profile.displayName?.split(' ')[0] || profile.username,
-      lastName: profile.displayName?.split(' ')[1] || '',
-      profilePicture: profile.photos[0]?.value,
-      bio: profile._json?.bio || '',
-      oauthProvider: 'github',
-      oauthId: profile.id.toString(),
-      // No se requiere contraseña para OAuth
-    });
-
-    console.log('✅ Usuario GitHub creado exitosamente:', newUser.username);
-    await newUser.updateLastLogin();
-    done(null, newUser);
-
-  } catch (error) {
-    console.error('❌ Error en autenticación GitHub:', error);
-    done(error, null);
-  }
-}));
+  }));
+  console.log('✅ Estrategia Google OAuth configurada');
+} else {
+  console.log('⚠️ Google OAuth deshabilitado - Credenciales faltantes');
+}
 
 /**
- * Rutas de autenticación OAuth
- * Estas rutas manejan el flujo de autenticación con proveedores externos
+ * Estrategia de GitHub OAuth
  */
+if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+  passport.use(new GitHubStrategy({
+    clientID: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    callbackURL: "/api/auth/github/callback"
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      console.log('🔐 Procesando autenticación GitHub para:', profile.username);
+      
+      // Buscar usuario existente
+      let user = await User.findOne({
+        $or: [
+          { oauthId: profile.id.toString(), oauthProvider: 'github' },
+          { email: profile.emails?.[0]?.value }
+        ]
+      });
+
+      if (user) {
+        // Usuario existente
+        if (!user.oauthId) {
+          user.oauthId = profile.id.toString();
+          user.oauthProvider = 'github';
+          await user.save();
+        }
+        console.log('✅ Usuario GitHub existente autenticado:', user.username);
+        await user.updateLastLogin();
+        return done(null, user);
+      }
+
+      // Crear nuevo usuario
+      const email = profile.emails?.[0]?.value || `${profile.username}@github.local`;
+      const newUser = await User.create({
+        username: profile.username + '_' + Date.now(),
+        email: email,
+        firstName: profile.displayName?.split(' ')[0] || profile.username,
+        lastName: profile.displayName?.split(' ')[1] || 'GitHub',
+        profilePicture: profile.photos[0]?.value,
+        bio: profile._json?.bio || '',
+        oauthProvider: 'github',
+        oauthId: profile.id.toString(),
+        isActive: true
+      });
+
+      console.log('✅ Nuevo usuario GitHub creado:', newUser.username);
+      await newUser.updateLastLogin();
+      return done(null, newUser);
+
+    } catch (error) {
+      console.error('❌ Error en GitHub OAuth:', error);
+      return done(error, null);
+    }
+  }));
+  console.log('✅ Estrategia GitHub OAuth configurada');
+} else {
+  console.log('⚠️ GitHub OAuth deshabilitado - Credenciales faltantes');
+}
 
 /**
- * Función para manejar el éxito de autenticación OAuth
- * Genera tokens JWT y redirige al frontend con los tokens
- * @param {Object} req - Objeto de petición
- * @param {Object} res - Objeto de respuesta
+ * Manejar éxito de autenticación OAuth
  */
 const handleOAuthSuccess = async (req, res) => {
   try {
-    // El usuario está disponible en req.user después de la autenticación exitosa
-    const user = req.user;
+    console.log('🎉 Autenticación OAuth exitosa para usuario:', req.user?.email || req.user?.username);
     
-    // Generar tokens JWT para el usuario autenticado
-    const { accessToken, refreshToken } = generateTokens(user._id);
+    if (!req.user) {
+      throw new Error('No se encontró información del usuario después de OAuth');
+    }
+
+    // Generar tokens JWT
+    const { accessToken, refreshToken } = generateTokens(req.user._id);
     
-    // Determinar URL de redirección del frontend
-    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // URL del frontend (ajusta según tu configuración)
+    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3001';
     
-    // Redirigir al frontend con los tokens en query params
-    // En producción, considera usar cookies seguras en su lugar
-    res.redirect(
-      `${frontendURL}/auth/success?token=${accessToken}&refresh=${refreshToken}&user=${encodeURIComponent(JSON.stringify({
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        profilePicture: user.profilePicture
-      }))}`
-    );
-    
+    // Crear URL de redirección con tokens
+    const redirectURL = `${frontendURL}/auth/success?token=${accessToken}&refresh=${refreshToken}&user=${encodeURIComponent(JSON.stringify({
+      id: req.user._id,
+      username: req.user.username,
+      email: req.user.email,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      profilePicture: req.user.profilePicture
+    }))}`;
+
+    console.log('🔄 Redirigiendo a:', frontendURL);
+    res.redirect(redirectURL);
+
   } catch (error) {
-    console.error('❌ Error en éxito OAuth:', error);
-    
-    // Redirigir al frontend con error
-    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(`${frontendURL}/auth/error?message=authentication_failed`);
+    console.error('❌ Error manejando éxito OAuth:', error);
+    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendURL}/auth/error?message=${encodeURIComponent('Error en la autenticación')}`);
   }
 };
 
 /**
- * Función para manejar fallos de autenticación OAuth
- * Redirige al frontend con mensaje de error
- * @param {Object} req - Objeto de petición
- * @param {Object} res - Objeto de respuesta
+ * Manejar fallo de autenticación OAuth
  */
 const handleOAuthFailure = (req, res) => {
   console.error('❌ Fallo en autenticación OAuth');
-  
-  const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3000';
-  res.redirect(`${frontendURL}/auth/error?message=authentication_failed`);
+  const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3001';
+  res.redirect(`${frontendURL}/auth/error?message=${encodeURIComponent('Error en la autenticación')}`);
 };
 
 module.exports = {

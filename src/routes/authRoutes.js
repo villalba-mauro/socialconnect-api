@@ -1,3 +1,4 @@
+// src/routes/authRoutes.js - Rutas OAuth sin debug
 const express = require('express');
 const router = express.Router();
 const { passport, handleOAuthSuccess, handleOAuthFailure } = require('../middleware/oauth');
@@ -10,9 +11,52 @@ const { passport, handleOAuthSuccess, handleOAuthFailure } = require('../middlew
  */
 
 /**
- * Ruta para iniciar autenticación con Google
- * Redirige al usuario a la página de autorización de Google
- * 
+ * @swagger
+ * /api/auth:
+ *   get:
+ *     summary: Información sobre endpoints de autenticación disponibles
+ *     tags: [Authentication]
+ *     responses:
+ *       200:
+ *         description: Lista de endpoints OAuth disponibles
+ */
+router.get('/', (req, res) => {
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const githubConfigured = !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
+  
+  res.json({
+    success: true,
+    message: 'SocialConnect API - Endpoints de Autenticación',
+    version: '1.0.0',
+    oauth: {
+      google: {
+        configured: googleConfigured,
+        endpoint: googleConfigured ? `${baseUrl}/api/auth/google` : 'No configurado',
+        status: googleConfigured ? 'Disponible ✅' : 'No disponible ❌'
+      },
+      github: {
+        configured: githubConfigured,
+        endpoint: githubConfigured ? `${baseUrl}/api/auth/github` : 'No configurado',
+        status: githubConfigured ? 'Disponible ✅' : 'No disponible ❌'
+      }
+    },
+    endpoints: {
+      googleOAuth: `${baseUrl}/api/auth/google`,
+      githubOAuth: `${baseUrl}/api/auth/github`,
+      status: `${baseUrl}/api/auth/status`,
+      test: `${baseUrl}/api/auth/test`,
+      logout: `${baseUrl}/api/auth/logout`
+    },
+    usage: {
+      google: 'Visita /api/auth/google para iniciar sesión con Google',
+      github: 'Visita /api/auth/github para iniciar sesión con GitHub',
+      status: 'Visita /api/auth/status para verificar tu estado de autenticación'
+    }
+  });
+});
+
+/**
  * @swagger
  * /api/auth/google:
  *   get:
@@ -22,142 +66,166 @@ const { passport, handleOAuthSuccess, handleOAuthFailure } = require('../middlew
  *     responses:
  *       302:
  *         description: Redirección a Google OAuth
+ *       503:
+ *         description: OAuth no configurado
  */
-router.get('/google', 
-  // passport.authenticate inicia el flujo OAuth con Google
-  // 'scope' define qué información solicitamos a Google
-  passport.authenticate('google', { 
-    scope: ['profile', 'email']  // Solicitar perfil y email del usuario
-  })
-);
+router.get('/google', (req, res, next) => {
+  // Verificar si Google OAuth está configurado
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    return res.status(503).json({
+      success: false,
+      error: 'Google OAuth no está configurado',
+      message: 'Las credenciales de Google no están disponibles',
+      required: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']
+    });
+  }
+  
+  // Verificar si passport está disponible
+  if (!passport) {
+    return res.status(500).json({
+      success: false,
+      error: 'Passport no está disponible',
+      message: 'Error interno del servidor OAuth'
+    });
+  }
+  
+  try {
+    passport.authenticate('google', {
+      scope: ['profile', 'email']
+    })(req, res, next);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Error iniciando OAuth con Google',
+      details: error.message
+    });
+  }
+});
 
 /**
- * Ruta callback para Google OAuth
- * Google redirige aquí después de que el usuario autoriza la aplicación
- * 
  * @swagger
  * /api/auth/google/callback:
  *   get:
  *     summary: Callback de Google OAuth
  *     tags: [Authentication]
  *     description: Maneja la respuesta de Google después de la autorización
- *     parameters:
- *       - in: query
- *         name: code
- *         schema:
- *           type: string
- *         description: Código de autorización de Google
- *     responses:
- *       302:
- *         description: Redirección al frontend con tokens
- *       401:
- *         description: Error de autenticación
  */
 router.get('/google/callback',
-  // Completar autenticación con Google
   passport.authenticate('google', { 
-    failureRedirect: '/auth/failure'  // Redirigir aquí si falla
+    failureRedirect: '/api/auth/failure'
   }),
-  // Si la autenticación es exitosa, manejar el éxito
   handleOAuthSuccess
 );
 
 /**
- * Ruta para iniciar autenticación con GitHub
- * Redirige al usuario a la página de autorización de GitHub
- * 
  * @swagger
  * /api/auth/github:
  *   get:
  *     summary: Iniciar autenticación con GitHub OAuth
  *     tags: [Authentication]
  *     description: Redirige al usuario a GitHub para autorización
- *     responses:
- *       302:
- *         description: Redirección a GitHub OAuth
  */
-router.get('/github',
-  // passport.authenticate inicia el flujo OAuth con GitHub
-  // 'scope' define qué información solicitamos a GitHub
-  passport.authenticate('github', { 
-    scope: ['user:email']  // Solicitar email del usuario
-  })
-);
+router.get('/github', (req, res, next) => {
+  // Verificar si GitHub OAuth está configurado
+  if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
+    return res.status(503).json({
+      success: false,
+      error: 'GitHub OAuth no está configurado',
+      message: 'Las credenciales de GitHub no están disponibles',
+      required: ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET']
+    });
+  }
+  
+  // Verificar si passport está disponible
+  if (!passport) {
+    return res.status(500).json({
+      success: false,
+      error: 'Passport no está disponible',
+      message: 'Error interno del servidor OAuth'
+    });
+  }
+  
+  try {
+    passport.authenticate('github', {
+      scope: ['user:email']
+    })(req, res, next);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Error iniciando OAuth con GitHub',
+      details: error.message
+    });
+  }
+});
 
 /**
- * Ruta callback para GitHub OAuth
- * GitHub redirige aquí después de que el usuario autoriza la aplicación
- * 
  * @swagger
  * /api/auth/github/callback:
  *   get:
  *     summary: Callback de GitHub OAuth
  *     tags: [Authentication]
  *     description: Maneja la respuesta de GitHub después de la autorización
- *     parameters:
- *       - in: query
- *         name: code
- *         schema:
- *           type: string
- *         description: Código de autorización de GitHub
- *     responses:
- *       302:
- *         description: Redirección al frontend con tokens
- *       401:
- *         description: Error de autenticación
  */
 router.get('/github/callback',
-  // Completar autenticación con GitHub
   passport.authenticate('github', { 
-    failureRedirect: '/auth/failure'
+    failureRedirect: '/api/auth/failure'
   }),
-  // Si la autenticación es exitosa, manejar el éxito
   handleOAuthSuccess
 );
 
 /**
- * Ruta para manejar fallos de autenticación
- * Se ejecuta cuando la autenticación OAuth falla
- * 
  * @swagger
  * /api/auth/failure:
  *   get:
  *     summary: Manejo de fallos de autenticación
  *     tags: [Authentication]
- *     description: Redirige al frontend cuando la autenticación falla
- *     responses:
- *       302:
- *         description: Redirección al frontend con error
  */
 router.get('/failure', handleOAuthFailure);
 
 /**
- * Ruta para cerrar sesión
- * Limpia la sesión del usuario y tokens
- * 
+ * @swagger
+ * /api/auth/status:
+ *   get:
+ *     summary: Verificar estado de autenticación
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Estado de autenticación
+ *       401:
+ *         description: No autenticado
+ */
+router.get('/status', (req, res) => {
+  const isAuthenticated = req.user || (req.isAuthenticated && req.isAuthenticated());
+  
+  if (isAuthenticated) {
+    res.json({
+      success: true,
+      authenticated: true,
+      user: req.user,
+      message: 'Usuario autenticado correctamente'
+    });
+  } else {
+    res.status(401).json({
+      success: false,
+      authenticated: false,
+      message: 'No autenticado'
+    });
+  }
+});
+
+/**
  * @swagger
  * /api/auth/logout:
  *   post:
  *     summary: Cerrar sesión del usuario
  *     tags: [Authentication]
- *     description: Cierra la sesión actual del usuario
  *     responses:
  *       200:
  *         description: Sesión cerrada exitosamente
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "Sesión cerrada exitosamente"
  */
 router.post('/logout', (req, res) => {
-  // Destruir la sesión de Passport
   req.logout((err) => {
     if (err) {
       return res.status(500).json({
@@ -166,7 +234,6 @@ router.post('/logout', (req, res) => {
       });
     }
     
-    // Limpiar la sesión completamente
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({
@@ -175,7 +242,6 @@ router.post('/logout', (req, res) => {
         });
       }
       
-      // Respuesta exitosa
       res.json({
         success: true,
         message: 'Sesión cerrada exitosamente'
@@ -185,53 +251,38 @@ router.post('/logout', (req, res) => {
 });
 
 /**
- * Ruta para verificar estado de autenticación
- * Útil para el frontend para verificar si el usuario está logueado
- * 
  * @swagger
- * /api/auth/status:
+ * /api/auth/test:
  *   get:
- *     summary: Verificar estado de autenticación
+ *     summary: Test de configuración OAuth
  *     tags: [Authentication]
- *     description: Verifica si el usuario actual está autenticado
- *     security:
- *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Estado de autenticación
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 authenticated:
- *                   type: boolean
- *                   example: true
- *                 user:
- *                   $ref: '#/components/schemas/User'
- *       401:
- *         description: No autenticado
+ *         description: Estado de configuración OAuth
  */
-router.get('/status', (req, res) => {
-  // Verificar si hay un usuario en la sesión o token JWT
-  const isAuthenticated = req.user || req.isAuthenticated();
+router.get('/test', (req, res) => {
+  const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  const githubConfigured = !!(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
   
-  if (isAuthenticated) {
-    res.json({
-      success: true,
-      authenticated: true,
-      user: req.user
-    });
-  } else {
-    res.status(401).json({
-      success: false,
-      authenticated: false,
-      message: 'No autenticado'
-    });
-  }
+  res.json({
+    success: true,
+    message: 'Test de configuración OAuth',
+    data: {
+      google: {
+        configured: googleConfigured,
+        status: googleConfigured ? 'Configurado ✅' : 'No configurado ❌'
+      },
+      github: {
+        configured: githubConfigured,
+        status: githubConfigured ? 'Configurado ✅' : 'No configurado ❌'
+      },
+      endpoints: {
+        google: '/api/auth/google',
+        github: '/api/auth/github',
+        status: '/api/auth/status'
+      }
+    }
+  });
 });
 
 module.exports = router;
