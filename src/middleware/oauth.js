@@ -1,4 +1,4 @@
-// src/middleware/oauth.js - Configuración OAuth sin debug
+// src/middleware/oauth.js - Versión corregida y robusta
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const GitHubStrategy = require('passport-github2').Strategy;
@@ -25,105 +25,153 @@ passport.deserializeUser(async (id, done) => {
 });
 
 /**
- * Estrategia de Google OAuth
+ * Estrategia de Google OAuth con URL de callback robusta
  */
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: googleCallbackURL
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      // Buscar usuario existente por Google ID o email
-      let user = await User.findOne({
-        $or: [
-          { oauthId: profile.id, oauthProvider: 'google' },
-          { email: profile.emails[0].value }
-        ]
-      });
+  // Construir URL de callback de manera robusta
+  let googleCallbackURL;
+  
+  if (process.env.NODE_ENV === 'production') {
+    // En producción, usar la URL externa de Render
+    const baseURL = process.env.RENDER_EXTERNAL_URL || 'https://socialconnect-api-f7qx.onrender.com';
+    googleCallbackURL = `${baseURL}/api/auth/google/callback`;
+  } else {
+    // En desarrollo, usar localhost
+    const port = process.env.PORT || 3000;
+    googleCallbackURL = `http://localhost:${port}/api/auth/google/callback`;
+  }
+  
+  console.log('🔗 Google OAuth configurado con callback:', googleCallbackURL);
+  
+  try {
+    passport.use(new GoogleStrategy({
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: googleCallbackURL
+    }, async (accessToken, refreshToken, profile, done) => {
+      try {
+        // Buscar usuario existente por Google ID o email
+        let user = await User.findOne({
+          $or: [
+            { oauthId: profile.id, oauthProvider: 'google' },
+            { email: profile.emails[0].value }
+          ]
+        });
 
-      if (user) {
-        // Usuario existente
-        if (!user.oauthId) {
-          user.oauthId = profile.id;
-          user.oauthProvider = 'google';
-          await user.save();
+        if (user) {
+          // Usuario existente
+          if (!user.oauthId) {
+            user.oauthId = profile.id;
+            user.oauthProvider = 'google';
+            await user.save();
+          }
+          await user.updateLastLogin();
+          return done(null, user);
         }
-        await user.updateLastLogin();
-        return done(null, user);
+
+        // Crear nuevo usuario
+        const newUser = await User.create({
+          username: profile.emails[0].value.split('@')[0] + '_' + Date.now(),
+          email: profile.emails[0].value,
+          firstName: profile.name.givenName || 'Usuario',
+          lastName: profile.name.familyName || 'Google',
+          profilePicture: profile.photos[0]?.value,
+          oauthProvider: 'google',
+          oauthId: profile.id,
+          isActive: true
+        });
+
+        await newUser.updateLastLogin();
+        return done(null, newUser);
+
+      } catch (error) {
+        console.error('❌ Error en callback de Google OAuth:', error);
+        return done(error, null);
       }
-
-      // Crear nuevo usuario
-      const newUser = await User.create({
-        username: profile.emails[0].value.split('@')[0] + '_' + Date.now(),
-        email: profile.emails[0].value,
-        firstName: profile.name.givenName || 'Usuario',
-        lastName: profile.name.familyName || 'Google',
-        profilePicture: profile.photos[0]?.value,
-        oauthProvider: 'google',
-        oauthId: profile.id,
-        isActive: true
-      });
-
-      await newUser.updateLastLogin();
-      return done(null, newUser);
-
-    } catch (error) {
-      return done(error, null);
-    }
-  }));
+    }));
+    
+    console.log('✅ Estrategia Google OAuth configurada exitosamente');
+  } catch (error) {
+    console.error('❌ Error configurando Google OAuth strategy:', error);
+  }
+} else {
+  console.log('⚠️ Google OAuth deshabilitado - Credenciales faltantes');
 }
 
 /**
- * Estrategia de GitHub OAuth
+ * Estrategia de GitHub OAuth con URL de callback robusta
  */
 if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  passport.use(new GitHubStrategy({
-    clientID: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: githubCallbackURL
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      // Buscar usuario existente
-      let user = await User.findOne({
-        $or: [
-          { oauthId: profile.id.toString(), oauthProvider: 'github' },
-          { email: profile.emails?.[0]?.value }
-        ]
-      });
+  // Construir URL de callback de manera robusta
+  let githubCallbackURL;
+  
+  if (process.env.NODE_ENV === 'production') {
+    // En producción, usar la URL externa de Render
+    const baseURL = process.env.RENDER_EXTERNAL_URL || 'https://socialconnect-api-f7qx.onrender.com';
+    githubCallbackURL = `${baseURL}/api/auth/github/callback`;
+  } else {
+    // En desarrollo, usar localhost
+    const port = process.env.PORT || 3000;
+    githubCallbackURL = `http://localhost:${port}/api/auth/github/callback`;
+  }
+  
+  console.log('🔗 GitHub OAuth configurado con callback:', githubCallbackURL);
+  
+  try {
+    passport.use(new GitHubStrategy({
+      clientID: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      callbackURL: githubCallbackURL
+    }, async (accessToken, refreshToken, profile, done) => {
+      try {
+        // Buscar usuario existente
+        let user = await User.findOne({
+          $or: [
+            { oauthId: profile.id.toString(), oauthProvider: 'github' },
+            { email: profile.emails?.[0]?.value }
+          ]
+        });
 
-      if (user) {
-        // Usuario existente
-        if (!user.oauthId) {
-          user.oauthId = profile.id.toString();
-          user.oauthProvider = 'github';
-          await user.save();
+        if (user) {
+          // Usuario existente
+          if (!user.oauthId) {
+            user.oauthId = profile.id.toString();
+            user.oauthProvider = 'github';
+            await user.save();
+          }
+          await user.updateLastLogin();
+          return done(null, user);
         }
-        await user.updateLastLogin();
-        return done(null, user);
+
+        // Crear nuevo usuario
+        const email = profile.emails?.[0]?.value || `${profile.username}@github.local`;
+        const newUser = await User.create({
+          username: profile.username + '_' + Date.now(),
+          email: email,
+          firstName: profile.displayName?.split(' ')[0] || profile.username,
+          lastName: profile.displayName?.split(' ')[1] || 'GitHub',
+          profilePicture: profile.photos[0]?.value,
+          bio: profile._json?.bio || '',
+          oauthProvider: 'github',
+          oauthId: profile.id.toString(),
+          isActive: true
+        });
+
+        await newUser.updateLastLogin();
+        return done(null, newUser);
+
+      } catch (error) {
+        console.error('❌ Error en callback de GitHub OAuth:', error);
+        return done(error, null);
       }
-
-      // Crear nuevo usuario
-      const email = profile.emails?.[0]?.value || `${profile.username}@github.local`;
-      const newUser = await User.create({
-        username: profile.username + '_' + Date.now(),
-        email: email,
-        firstName: profile.displayName?.split(' ')[0] || profile.username,
-        lastName: profile.displayName?.split(' ')[1] || 'GitHub',
-        profilePicture: profile.photos[0]?.value,
-        bio: profile._json?.bio || '',
-        oauthProvider: 'github',
-        oauthId: profile.id.toString(),
-        isActive: true
-      });
-
-      await newUser.updateLastLogin();
-      return done(null, newUser);
-
-    } catch (error) {
-      return done(error, null);
-    }
-  }));
+    }));
+    
+    console.log('✅ Estrategia GitHub OAuth configurada exitosamente');
+  } catch (error) {
+    console.error('❌ Error configurando GitHub OAuth strategy:', error);
+  }
+} else {
+  console.log('⚠️ GitHub OAuth deshabilitado - Credenciales faltantes');
 }
 
 /**
@@ -154,6 +202,7 @@ const handleOAuthSuccess = async (req, res) => {
     res.redirect(redirectURL);
 
   } catch (error) {
+    console.error('❌ Error manejando éxito OAuth:', error);
     const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3001';
     res.redirect(`${frontendURL}/auth/error?message=${encodeURIComponent('Error en la autenticación')}`);
   }
