@@ -1,4 +1,4 @@
-// src/validators/commentValidators.js - Validadores para operaciones de comentarios
+// src/validators/commentValidators.js - Validadores corregidos para comentarios
 const { body, param, query, validationResult } = require('express-validator');
 
 /**
@@ -45,11 +45,18 @@ const validateCreateComment = [
       return true;
     }),
 
-  // Validar parentCommentId (opcional)
+  // 🔧 ARREGLADO: Validar parentCommentId (opcional) - manejar null correctamente
   body('parentCommentId')
-    .optional()
-    .isMongoId()
-    .withMessage('ID de comentario padre inválido'),
+    .optional({ nullable: true, checkFalsy: false })  // ← Permite null y undefined
+    .custom((value) => {
+      // Si el valor existe y no es null, debe ser un MongoId válido
+      if (value !== null && value !== undefined && value !== '') {
+        if (!require('mongoose').Types.ObjectId.isValid(value)) {
+          throw new Error('ID de comentario padre inválido');
+        }
+      }
+      return true;
+    }),
 
   handleValidationErrors
 ];
