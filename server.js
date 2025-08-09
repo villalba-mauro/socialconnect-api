@@ -234,10 +234,14 @@ app.use('*', (req, res) => {
       documentation: '/api-docs',
       users: '/api/users',
       posts: '/api/posts',
+      comments: '/api/comments',  
+      likes: '/api/likes',  
       auth: {
         google: '/api/auth/google',
         github: '/api/auth/github',
-        status: '/api/auth/status'
+        status: '/api/auth/status',
+        success: '/api/auth/success', 
+        error: '/api/auth/error' 
       }
     }
   });

@@ -1,4 +1,4 @@
-// src/middleware/oauth.js - Versión corregida y robusta
+// src/middleware/oauth.js - Versión corregida con redirección a API
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const GitHubStrategy = require('passport-github2').Strategy;
@@ -189,10 +189,10 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
         const newUser = await User.create({
           username: username,
           email: email,
-          firstName: profile.displayName?.split(' ')[0] || profile.username || 'GitHub',
-          lastName: profile.displayName?.split(' ')[1] || 'User',
+          firstName: (profile.displayName?.split(' ')[0] || profile.username || 'GitHub').substring(0, 50),
+          lastName: (profile.displayName?.split(' ')[1] || 'User').substring(0, 50),
           profilePicture: profilePicture, // Puede ser null si no es válida
-          bio: profile._json?.bio || '',
+          bio: (profile._json?.bio || '').substring(0, 500), // Límite 500 chars para bio
           oauthProvider: 'github',
           oauthId: profile.id.toString(),
           isActive: true
@@ -217,6 +217,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
 
 /**
  * Manejar éxito de autenticación OAuth
+ * ¡CORREGIDO! Ahora redirige a /api/auth/success
  */
 const handleOAuthSuccess = async (req, res) => {
   try {
@@ -227,11 +228,16 @@ const handleOAuthSuccess = async (req, res) => {
     // Generar tokens JWT
     const { accessToken, refreshToken } = generateTokens(req.user._id);
     
-    // URL del frontend
-    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3001';
+    // Construir URL base correcta
+    let baseURL;
+    if (process.env.NODE_ENV === 'production') {
+      baseURL = process.env.RENDER_EXTERNAL_URL || 'https://socialconnect-api-f7qx.onrender.com';
+    } else {
+      baseURL = `http://localhost:${process.env.PORT || 3000}`;
+    }
     
-    // Crear URL de redirección con tokens
-    const redirectURL = `${frontendURL}/auth/success?token=${accessToken}&refresh=${refreshToken}&user=${encodeURIComponent(JSON.stringify({
+    // ¡CORREGIDO! Redirigir a /api/auth/success (no /auth/success)
+    const redirectURL = `${baseURL}/api/auth/success?token=${accessToken}&refresh=${refreshToken}&user=${encodeURIComponent(JSON.stringify({
       id: req.user._id,
       username: req.user.username,
       email: req.user.email,
@@ -240,21 +246,35 @@ const handleOAuthSuccess = async (req, res) => {
       profilePicture: req.user.profilePicture
     }))}`;
 
+    console.log('🎉 OAuth exitoso, redirigiendo a:', redirectURL);
     res.redirect(redirectURL);
 
   } catch (error) {
     console.error('❌ Error manejando éxito OAuth:', error);
-    const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendURL}/auth/error?message=${encodeURIComponent('Error en la autenticación')}`);
+    let baseURL;
+    if (process.env.NODE_ENV === 'production') {
+      baseURL = process.env.RENDER_EXTERNAL_URL || 'https://socialconnect-api-f7qx.onrender.com';
+    } else {
+      baseURL = `http://localhost:${process.env.PORT || 3000}`;
+    }
+    // ¡CORREGIDO! Redirigir a /api/auth/error (no /auth/error)
+    res.redirect(`${baseURL}/api/auth/error?message=${encodeURIComponent('Error en la autenticación')}`);
   }
 };
 
 /**
  * Manejar fallo de autenticación OAuth
+ * ¡CORREGIDO! Ahora redirige a /api/auth/error
  */
 const handleOAuthFailure = (req, res) => {
-  const frontendURL = process.env.FRONTEND_URL || 'http://localhost:3001';
-  res.redirect(`${frontendURL}/auth/error?message=${encodeURIComponent('Error en la autenticación')}`);
+  let baseURL;
+  if (process.env.NODE_ENV === 'production') {
+    baseURL = process.env.RENDER_EXTERNAL_URL || 'https://socialconnect-api-f7qx.onrender.com';
+  } else {
+    baseURL = `http://localhost:${process.env.PORT || 3000}`;
+  }
+  // ¡CORREGIDO! Redirigir a /api/auth/error (no /auth/error)
+  res.redirect(`${baseURL}/api/auth/error?message=${encodeURIComponent('Error en la autenticación OAuth')}`);
 };
 
 module.exports = {
