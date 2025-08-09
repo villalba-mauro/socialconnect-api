@@ -159,6 +159,8 @@ app.get('/', (req, res) => {
     endpoints: {
       users: `${baseUrl}/api/users`,
       posts: `${baseUrl}/api/posts`,
+      comments: `${baseUrl}/api/comments`,
+      likes: `${baseUrl}/api/likes`,
       auth: `${baseUrl}/api/auth`,
       docs: `${baseUrl}/api-docs`
     }
@@ -198,6 +200,26 @@ try {
   app.use('/api/posts', postRoutes);
 } catch (error) {
   console.error('❌ Error cargando rutas de posts:', error.message);
+}
+
+/**
+ * Importar y configurar rutas de comentarios
+ */
+try {
+  const commentRoutes = require('./src/routes/commentRoutes');
+  app.use('/api/comments', commentRoutes);
+} catch (error) {
+  console.error('❌ Error cargando rutas de comentarios:', error.message);
+}
+
+/**
+ * Importar y configurar rutas de likes
+ */
+try {
+  const likeRoutes = require('./src/routes/likeRoutes');
+  app.use('/api/likes', likeRoutes);
+} catch (error) {
+  console.error('❌ Error cargando rutas de likes:', error.message);
 }
 
 /**

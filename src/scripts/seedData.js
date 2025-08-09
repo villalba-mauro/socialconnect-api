@@ -1,4 +1,4 @@
-// src/scripts/seedData.js - Script para generar datos de prueba para demostración
+// src/scripts/seedData.js - Script para generar datos de prueba con 4 colecciones
 
 /**
  * Este script crea datos de ejemplo en la base de datos
@@ -10,6 +10,8 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Post = require('../models/Post');
+const Comment = require('../models/Comment'); // ← Asegúrate que el archivo se llame Comment.js
+const Like = require('../models/Like');
 require('dotenv').config();
 
 /**
@@ -42,7 +44,7 @@ const sampleUsers = [
     firstName: 'Mike',
     lastName: 'Johnson',
     bio: 'Ingeniero de software y entusiasta de la inteligencia artificial. Siempre aprendiendo nuevas tecnologías.',
-    profilePicture: 'http://localhost:3000//images/mike.jpg'
+    profilePicture: 'http://localhost:3000/images/mike.jpg'
   },
   {
     username: 'sarah_wilson',
@@ -135,11 +137,81 @@ const generateSamplePosts = (users) => [
 ];
 
 /**
- * Función principal para ejecutar el seeding
+ * Función para generar comentarios de ejemplo
+ * Se ejecuta después de crear posts para tener IDs válidos
+ */
+const generateSampleComments = (users, posts) => [
+  {
+    postId: posts[0]._id,
+    userId: users[1]._id,
+    content: "¡Excelente post! Me encanta cómo explicas Node.js 👏"
+  },
+  {
+    postId: posts[0]._id,
+    userId: users[2]._id,
+    content: "Muy útil para principiantes. ¿Tienes algún tutorial recomendado?"
+  },
+  {
+    postId: posts[1]._id,
+    userId: users[0]._id,
+    content: "Los colores se ven increíbles! 🎨 ¿Qué herramienta usaste?"
+  },
+  {
+    postId: posts[1]._id,
+    userId: users[3]._id,
+    content: "Como PM, puedo decir que este tipo de UI mejora la experiencia del usuario"
+  },
+  {
+    postId: posts[2]._id,
+    userId: users[4]._id,
+    content: "Machine learning es fascinante! Estoy estudiando algo similar en la universidad"
+  },
+  {
+    postId: posts[3]._id,
+    userId: users[1]._id,
+    content: "Jajaja 😂 muy cierto! La documentación salva vidas"
+  },
+  {
+    postId: posts[4]._id,
+    userId: users[2]._id,
+    content: "Totalmente de acuerdo. La simplicidad es clave en el desarrollo de productos"
+  },
+  {
+    postId: posts[5]._id,
+    userId: users[0]._id,
+    content: "Ese dashboard se ve profesional! ¿Lo hiciste en Figma?"
+  }
+];
+
+/**
+ * Función para generar likes de ejemplo
+ * Se ejecuta después de crear posts y comentarios
+ */
+const generateSampleLikes = (users, posts, comments) => [
+  // Likes en posts
+  { userId: users[0]._id, targetType: 'Post', targetId: posts[1]._id },
+  { userId: users[1]._id, targetType: 'Post', targetId: posts[0]._id },
+  { userId: users[2]._id, targetType: 'Post', targetId: posts[0]._id },
+  { userId: users[3]._id, targetType: 'Post', targetId: posts[2]._id },
+  { userId: users[4]._id, targetType: 'Post', targetId: posts[1]._id },
+  { userId: users[0]._id, targetType: 'Post', targetId: posts[4]._id },
+  { userId: users[1]._id, targetType: 'Post', targetId: posts[3]._id },
+  { userId: users[2]._id, targetType: 'Post', targetId: posts[5]._id },
+  
+  // Likes en comentarios
+  { userId: users[0]._id, targetType: 'Comment', targetId: comments[0]._id },
+  { userId: users[2]._id, targetType: 'Comment', targetId: comments[1]._id },
+  { userId: users[3]._id, targetType: 'Comment', targetId: comments[2]._id },
+  { userId: users[4]._id, targetType: 'Comment', targetId: comments[3]._id },
+  { userId: users[1]._id, targetType: 'Comment', targetId: comments[4]._id }
+];
+
+/**
+ * Función principal para ejecutar el seeding con 4 colecciones
  */
 async function seedDatabase() {
   try {
-    console.log('🌱 Iniciando proceso de seeding...');
+    console.log('🌱 Iniciando proceso de seeding con 4 colecciones...');
 
     // Conectar a MongoDB
     await mongoose.connect(process.env.MONGODB_URI, {
@@ -148,13 +220,15 @@ async function seedDatabase() {
     });
     console.log('✅ Conectado a MongoDB');
 
-    // Limpiar datos existentes (CUIDADO: esto elimina todos los datos)
+    // Limpiar datos existentes de TODAS las colecciones
     console.log('🧹 Limpiando datos existentes...');
     await User.deleteMany({});
     await Post.deleteMany({});
+    await Comment.deleteMany({});  
+    await Like.deleteMany({});     
     console.log('✅ Datos existentes eliminados');
 
-    // Crear usuarios
+    // 1. Crear usuarios
     console.log('👥 Creando usuarios de ejemplo...');
     const createdUsers = await User.create(sampleUsers);
     console.log(`✅ ${createdUsers.length} usuarios creados exitosamente`);
@@ -164,17 +238,42 @@ async function seedDatabase() {
       console.log(`   - ${user.firstName} ${user.lastName} (@${user.username})`);
     });
 
-    // Crear posts
+    // 2. Crear posts
     console.log('📝 Creando posts de ejemplo...');
     const samplePosts = generateSamplePosts(createdUsers);
     const createdPosts = await Post.create(samplePosts);
     console.log(`✅ ${createdPosts.length} posts creados exitosamente`);
 
+    // 3. Crear comentarios
+    console.log('💬 Creando comentarios de ejemplo...');
+    const sampleComments = generateSampleComments(createdUsers, createdPosts);
+    const createdComments = await Comment.create(sampleComments);
+    console.log(`✅ ${createdComments.length} comentarios creados exitosamente`);
+
+    // 4. Crear likes
+    console.log('❤️ Creando likes de ejemplo...');
+    const sampleLikes = generateSampleLikes(createdUsers, createdPosts, createdComments);
+    const createdLikes = await Like.create(sampleLikes);
+    console.log(`✅ ${createdLikes.length} likes creados exitosamente`);
+
     // Mostrar estadísticas finales
     console.log('\n📊 Estadísticas del seeding:');
     console.log(`   - Usuarios creados: ${createdUsers.length}`);
     console.log(`   - Posts creados: ${createdPosts.length}`);
-    console.log(`   - Total de registros: ${createdUsers.length + createdPosts.length}`);
+    console.log(`   - Comentarios creados: ${createdComments.length}`);
+    console.log(`   - Likes creados: ${createdLikes.length}`);
+    console.log(`   - Total de registros: ${createdUsers.length + createdPosts.length + createdComments.length + createdLikes.length}`);
+
+    // Verificar que las 4 colecciones existen en MongoDB
+    console.log('\n🔍 Verificando colecciones en MongoDB:');
+    const collections = await mongoose.connection.db.listCollections().toArray();
+    const collectionNames = collections.map(col => col.name);
+    
+    console.log('Colecciones encontradas:', collectionNames);
+    console.log('✅ users:', collectionNames.includes('users') ? 'Existe' : 'No existe');
+    console.log('✅ posts:', collectionNames.includes('posts') ? 'Existe' : 'No existe');
+    console.log('✅ comments:', collectionNames.includes('comments') ? 'Existe' : 'No existe');
+    console.log('✅ likes:', collectionNames.includes('likes') ? 'Existe' : 'No existe');
 
     // Mostrar algunos datos de ejemplo para verificación
     console.log('\n🔍 Datos de verificación:');
@@ -188,13 +287,21 @@ async function seedDatabase() {
       author: createdUsers[0].username,
       content: createdPosts[0].content.substring(0, 50) + '...'
     });
+    console.log('Primer comentario:', {
+      id: createdComments[0]._id,
+      content: createdComments[0].content.substring(0, 30) + '...',
+      postId: createdComments[0].postId
+    });
+    console.log('Primer like:', {
+      id: createdLikes[0]._id,
+      targetType: createdLikes[0].targetType,
+      targetId: createdLikes[0].targetId
+    });
 
-    console.log('\n🎉 ¡Seeding completado exitosamente!');
-    console.log('💡 Ahora puedes:');
-    console.log('   1. Iniciar tu servidor: npm run dev');
-    console.log('   2. Ir a http://localhost:3000/api-docs');
-    console.log('   3. Probar los endpoints con datos reales');
-    console.log('   4. Usar estos datos para tu video de demostración');
+    console.log('\n🎉 ¡Seeding completado exitosamente con 4 colecciones!');
+    
+    
+    console.log('  Ir a http://localhost:3000/api-docs');
 
   } catch (error) {
     console.error('❌ Error durante el seeding:', error);
@@ -233,8 +340,10 @@ async function cleanDatabase() {
 
     await User.deleteMany({});
     await Post.deleteMany({});
+    await Comment.deleteMany({});  
+    await Like.deleteMany({});     
 
-    console.log('✅ Base de datos limpiada exitosamente');
+    console.log('✅ Base de datos limpiada exitosamente (4 colecciones)');
 
   } catch (error) {
     console.error('❌ Error al limpiar base de datos:', error);
@@ -259,5 +368,7 @@ module.exports = {
   seedDatabase,
   cleanDatabase,
   sampleUsers,
-  generateSamplePosts
+  generateSamplePosts,
+  generateSampleComments,
+  generateSampleLikes
 };
