@@ -285,4 +285,169 @@ router.get('/test', (req, res) => {
   });
 });
 
+
+/**
+ * @swagger
+ * /api/auth/success:
+ *   get:
+ *     summary: Resultado de OAuth exitoso (API response)
+ *     tags: [Authentication]
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         schema:
+ *           type: string
+ *         description: JWT access token
+ *       - in: query
+ *         name: refresh
+ *         schema:
+ *           type: string
+ *         description: JWT refresh token
+ *       - in: query
+ *         name: user
+ *         schema:
+ *           type: string
+ *         description: User data (URL encoded JSON)
+ *     responses:
+ *       200:
+ *         description: OAuth success with tokens and user info
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "OAuth authentication successful"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
+ *                     tokens:
+ *                       type: object
+ *                       properties:
+ *                         accessToken:
+ *                           type: string
+ *                         refreshToken:
+ *                           type: string
+ */
+router.get('/success', (req, res) => {
+  const { token, refresh, user } = req.query;
+  
+  try {
+    // Decodificar información del usuario
+    let userData = null;
+    if (user) {
+      userData = JSON.parse(decodeURIComponent(user));
+    }
+
+    // Respuesta JSON limpia para API
+    res.status(200).json({
+      success: true,
+      message: 'OAuth authentication successful',
+      provider: 'Google',
+      data: {
+        user: userData || null,
+        tokens: {
+          accessToken: token || null,
+          refreshToken: refresh || null,
+          tokenType: 'Bearer',
+          expiresIn: '24h'
+        },
+        usage: {
+          instructions: 'Use the accessToken in the Authorization header: Bearer <token>',
+          example: `Authorization: Bearer ${token ? token.substring(0, 30) + '...' : 'your-token-here'}`
+        }
+      },
+      endpoints: {
+        profile: '/api/users/profile',
+        posts: '/api/posts',
+        users: '/api/users',
+        documentation: '/api-docs'
+      },
+      note: 'OAuth authentication completed successfully. User has been created/updated in database.'
+    });
+
+  } catch (error) {
+    console.error('Error en OAuth success:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Error processing OAuth result',
+      message: 'OAuth was successful but there was an error processing the response',
+      data: {
+        tokens: {
+          accessToken: token ? 'Available but not parsed' : 'Not available',
+          refreshToken: refresh ? 'Available but not parsed' : 'Not available'
+        }
+      }
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/auth/error:
+ *   get:
+ *     summary: OAuth error response
+ *     tags: [Authentication]
+ *     parameters:
+ *       - in: query
+ *         name: message
+ *         schema:
+ *           type: string
+ *         description: Error message
+ *     responses:
+ *       400:
+ *         description: OAuth error response
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "OAuth authentication failed"
+ *                 message:
+ *                   type: string
+ *                 troubleshooting:
+ *                   type: object
+ */
+router.get('/error', (req, res) => {
+  const { message } = req.query;
+  
+  res.status(400).json({
+    success: false,
+    error: 'OAuth authentication failed',
+    message: message || 'An error occurred during OAuth authentication',
+    provider: 'Google',
+    troubleshooting: {
+      commonCauses: [
+        'User denied access',
+        'Invalid OAuth configuration',
+        'Network connectivity issues',
+        'Google account restrictions'
+      ],
+      nextSteps: [
+        'Try again: /api/auth/google',
+        'Check OAuth configuration',
+        'Verify Google Cloud Console settings',
+        'Contact administrator if problem persists'
+      ]
+    },
+    endpoints: {
+      tryAgain: '/api/auth/google',
+      documentation: '/api-docs',
+      support: '/api/auth/test'
+    }
+  });
+});
+
+
 module.exports = router;
