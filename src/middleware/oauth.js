@@ -69,13 +69,34 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           return done(null, user);
         }
 
-        // Crear nuevo usuario
+        // Crear nuevo usuario con validaciones corregidas
+        const baseUsername = profile.emails[0].value.split('@')[0];
+        const timestamp = Date.now().toString().slice(-6); // Solo últimos 6 dígitos
+        
+        // Asegurar que el username no exceda 30 caracteres
+        let username = `${baseUsername}_${timestamp}`;
+        if (username.length > 30) {
+          const maxBaseLength = 30 - timestamp.length - 1; // -1 para el '_'
+          username = `${baseUsername.substring(0, maxBaseLength)}_${timestamp}`;
+        }
+
+        // Validar URL de imagen de Google o usar null
+        let profilePicture = null;
+        if (profile.photos && profile.photos[0] && profile.photos[0].value) {
+          const imageUrl = profile.photos[0].value;
+          // Google URLs son válidas, pero no terminan en extensiones tradicionales
+          // Verificar que sea una URL de Google válida
+          if (imageUrl.includes('googleusercontent.com') || imageUrl.includes('google.com')) {
+            profilePicture = imageUrl;
+          }
+        }
+
         const newUser = await User.create({
-          username: profile.emails[0].value.split('@')[0] + '_' + Date.now(),
+          username: username,
           email: profile.emails[0].value,
-          firstName: profile.name.givenName || 'Usuario',
-          lastName: profile.name.familyName || 'Google',
-          profilePicture: profile.photos[0]?.value,
+          firstName: (profile.name.givenName || 'Usuario').substring(0, 50), // Límite 50 chars
+          lastName: (profile.name.familyName || 'Google').substring(0, 50),  // Límite 50 chars
+          profilePicture: profilePicture, // Puede ser null si no es válida
           oauthProvider: 'google',
           oauthId: profile.id,
           isActive: true
@@ -143,14 +164,34 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
           return done(null, user);
         }
 
-        // Crear nuevo usuario
+        // Crear nuevo usuario con validaciones corregidas
+        const baseUsername = profile.username || 'github_user';
+        const timestamp = Date.now().toString().slice(-6); // Solo últimos 6 dígitos
+        
+        // Asegurar que el username no exceda 30 caracteres
+        let username = `${baseUsername}_${timestamp}`;
+        if (username.length > 30) {
+          const maxBaseLength = 30 - timestamp.length - 1; // -1 para el '_'
+          username = `${baseUsername.substring(0, maxBaseLength)}_${timestamp}`;
+        }
+
+        // Validar URL de imagen de GitHub o usar null
+        let profilePicture = null;
+        if (profile.photos && profile.photos[0] && profile.photos[0].value) {
+          const imageUrl = profile.photos[0].value;
+          // GitHub URLs son válidas
+          if (imageUrl.includes('github.com') || imageUrl.includes('githubusercontent.com')) {
+            profilePicture = imageUrl;
+          }
+        }
+
         const email = profile.emails?.[0]?.value || `${profile.username}@github.local`;
         const newUser = await User.create({
-          username: profile.username + '_' + Date.now(),
+          username: username,
           email: email,
-          firstName: profile.displayName?.split(' ')[0] || profile.username,
-          lastName: profile.displayName?.split(' ')[1] || 'GitHub',
-          profilePicture: profile.photos[0]?.value,
+          firstName: profile.displayName?.split(' ')[0] || profile.username || 'GitHub',
+          lastName: profile.displayName?.split(' ')[1] || 'User',
+          profilePicture: profilePicture, // Puede ser null si no es válida
           bio: profile._json?.bio || '',
           oauthProvider: 'github',
           oauthId: profile.id.toString(),

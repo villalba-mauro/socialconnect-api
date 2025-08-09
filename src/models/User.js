@@ -60,18 +60,22 @@ const userSchema = new mongoose.Schema({
     default: null,
     validate: {
       validator: function(v) {
-        // Si hay valor, debe ser una URL válida
-        return !v || /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/i.test(v);
+        if (!v) return true; // null/undefined es válido
+        
+        // Validar que sea una URL válida
+        const urlRegex = /^https?:\/\/.+/;
+        if (!urlRegex.test(v)) return false;
+        
+        // Para URLs de Google (OAuth), permitir sin extensión
+        if (v.includes('googleusercontent.com') || v.includes('github.com') || v.includes('githubusercontent.com')) {
+          return true;
+        }
+        
+        // Para otras URLs, requerir extensión de imagen
+        return /\.(jpg|jpeg|png|gif|webp)$/i.test(v);
       },
-      message: 'La URL de la imagen debe ser válida y terminar en jpg, jpeg, png, gif o webp'
+      message: 'La URL de la imagen debe ser válida. Para URLs personalizadas debe terminar en jpg, jpeg, png, gif o webp'
     }
-  },
-
-  // Biografía del usuario
-  bio: {
-    type: String,
-    maxlength: [500, 'La biografía no puede exceder 500 caracteres'],
-    default: ''
   },
 
   // Fecha de creación de la cuenta
