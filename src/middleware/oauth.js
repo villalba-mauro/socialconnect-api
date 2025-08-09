@@ -225,13 +225,6 @@ const handleOAuthSuccess = async (req, res) => {
       throw new Error('No se encontró información del usuario después de OAuth');
     }
 
-    // Generar tokens JWT pero NO exponerlos
-    const { accessToken, refreshToken } = generateTokens(req.user._id);
-    
-    // Guardar tokens en la sesión o base de datos (opcional)
-    // req.session.accessToken = accessToken;
-    // req.session.refreshToken = refreshToken;
-
     console.log('🎉 OAuth exitoso para:', req.user.username);
     
     // 🔒 RESPUESTA SEGURA: Solo confirmación, sin tokens
@@ -244,30 +237,20 @@ const handleOAuthSuccess = async (req, res) => {
           id: req.user._id,
           username: req.user.username,
           firstName: req.user.firstName,
-          lastName: req.user.lastName,
-          // NO incluir email ni información sensible
+          lastName: req.user.lastName
+          
         },
         authentication: {
           status: 'successful',
           provider: req.user.oauthProvider,
-          timestamp: new Date().toISOString(),
-          // NO incluir tokens aquí
-        },
-        nextSteps: {
-          message: 'Para obtener tu token de acceso, usa el endpoint /api/auth/get-token',
-          endpoint: '/api/auth/get-token',
-          method: 'POST',
-          description: 'Envía tus credenciales para recibir el token de forma segura'
+          timestamp: new Date().toISOString()
         }
       },
-      endpoints: {
-        getToken: '/api/auth/get-token',
-        profile: '/api/users/profile',
+      note: 'Usuario autenticado correctamente en el sistema',
+      nextSteps: {
+        message: 'Para acceder a la API, usa POST /api/users/login con tus credenciales',
+        loginEndpoint: '/api/users/login',
         documentation: '/api-docs'
-      },
-      security: {
-        note: 'Los tokens no se exponen por seguridad',
-        instructions: 'Usa el endpoint get-token para obtener tu token de acceso'
       }
     });
 
