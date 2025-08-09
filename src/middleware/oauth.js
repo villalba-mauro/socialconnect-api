@@ -225,40 +225,61 @@ const handleOAuthSuccess = async (req, res) => {
       throw new Error('No se encontró información del usuario después de OAuth');
     }
 
-    // Generar tokens JWT
+    // Generar tokens JWT pero NO exponerlos
     const { accessToken, refreshToken } = generateTokens(req.user._id);
     
-    // Construir URL base correcta
-    let baseURL;
-    if (process.env.NODE_ENV === 'production') {
-      baseURL = process.env.RENDER_EXTERNAL_URL || 'https://socialconnect-api-f7qx.onrender.com';
-    } else {
-      baseURL = `http://localhost:${process.env.PORT || 3000}`;
-    }
-    
-    // ¡CORREGIDO! Redirigir a /api/auth/success (no /auth/success)
-    const redirectURL = `${baseURL}/api/auth/success?token=${accessToken}&refresh=${refreshToken}&user=${encodeURIComponent(JSON.stringify({
-      id: req.user._id,
-      username: req.user.username,
-      email: req.user.email,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      profilePicture: req.user.profilePicture
-    }))}`;
+    // Guardar tokens en la sesión o base de datos (opcional)
+    // req.session.accessToken = accessToken;
+    // req.session.refreshToken = refreshToken;
 
-    console.log('🎉 OAuth exitoso, redirigiendo a:', redirectURL);
-    res.redirect(redirectURL);
+    console.log('🎉 OAuth exitoso para:', req.user.username);
+    
+    // 🔒 RESPUESTA SEGURA: Solo confirmación, sin tokens
+    res.status(200).json({
+      success: true,
+      message: 'Autenticación OAuth completada exitosamente',
+      provider: req.user.oauthProvider,
+      data: {
+        user: {
+          id: req.user._id,
+          username: req.user.username,
+          firstName: req.user.firstName,
+          lastName: req.user.lastName,
+          // NO incluir email ni información sensible
+        },
+        authentication: {
+          status: 'successful',
+          provider: req.user.oauthProvider,
+          timestamp: new Date().toISOString(),
+          // NO incluir tokens aquí
+        },
+        nextSteps: {
+          message: 'Para obtener tu token de acceso, usa el endpoint /api/auth/get-token',
+          endpoint: '/api/auth/get-token',
+          method: 'POST',
+          description: 'Envía tus credenciales para recibir el token de forma segura'
+        }
+      },
+      endpoints: {
+        getToken: '/api/auth/get-token',
+        profile: '/api/users/profile',
+        documentation: '/api-docs'
+      },
+      security: {
+        note: 'Los tokens no se exponen por seguridad',
+        instructions: 'Usa el endpoint get-token para obtener tu token de acceso'
+      }
+    });
 
   } catch (error) {
     console.error('❌ Error manejando éxito OAuth:', error);
-    let baseURL;
-    if (process.env.NODE_ENV === 'production') {
-      baseURL = process.env.RENDER_EXTERNAL_URL || 'https://socialconnect-api-f7qx.onrender.com';
-    } else {
-      baseURL = `http://localhost:${process.env.PORT || 3000}`;
-    }
-    // ¡CORREGIDO! Redirigir a /api/auth/error (no /auth/error)
-    res.redirect(`${baseURL}/api/auth/error?message=${encodeURIComponent('Error en la autenticación')}`);
+    res.status(500).json({
+      success: false,
+      error: 'Error procesando autenticación OAuth',
+      message: error.message,
+      provider: 'OAuth',
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
