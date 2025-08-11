@@ -226,19 +226,26 @@ const handleOAuthSuccess = async (req, res) => {
     }
 
     console.log('🎉 OAuth exitoso para:', req.user.username);
-    
-    // 🔒 RESPUESTA SEGURA: Solo confirmación, sin tokens
+
+    // Generar tokens JWT usando la función de auth.js
+    const { accessToken, refreshToken } = generateTokens(req.user._id);
+
+    // Respuesta con usuario + tokens
     res.status(200).json({
       success: true,
       message: 'Autenticación OAuth completada exitosamente',
       provider: req.user.oauthProvider,
+      tokens: {
+        accessToken,
+        refreshToken
+      },
       data: {
         user: {
           id: req.user._id,
           username: req.user.username,
           firstName: req.user.firstName,
-          lastName: req.user.lastName
-          
+          lastName: req.user.lastName,
+          email: req.user.email
         },
         authentication: {
           status: 'successful',
@@ -246,12 +253,7 @@ const handleOAuthSuccess = async (req, res) => {
           timestamp: new Date().toISOString()
         }
       },
-      note: 'Usuario autenticado correctamente en el sistema',
-      nextSteps: {
-        message: 'Para acceder a la API, usa POST /api/users/login con tus credenciales',
-        loginEndpoint: '/api/users/login',
-        documentation: '/api-docs'
-      }
+      note: 'Incluye este accessToken en la cabecera Authorization como "Bearer <token>" para acceder a rutas protegidas'
     });
 
   } catch (error) {
@@ -265,6 +267,7 @@ const handleOAuthSuccess = async (req, res) => {
     });
   }
 };
+
 
 /**
  * Manejar fallo de autenticación OAuth
